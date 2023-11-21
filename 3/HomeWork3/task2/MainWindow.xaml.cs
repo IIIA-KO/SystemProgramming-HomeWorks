@@ -1,18 +1,18 @@
 ﻿using System.Runtime.InteropServices;
 using System;
 using System.Windows;
+using System.Windows.Interop;
 
 namespace task2
 {
     public partial class MainWindow : Window
     {
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
 
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, string lParam);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        static extern int SendMessage(IntPtr hWnd, int wMsg, IntPtr wParam, IntPtr lParam);
 
-        // Коди повідомлень
         const int WM_SETTEXT = 0x000C;
         const int WM_CLOSE = 0x0010;
 
@@ -21,27 +21,35 @@ namespace task2
             InitializeComponent();
         }
 
-        private void btnApplyAction_Click(object sender, RoutedEventArgs e)
+        private void SearchButton_Click(object sender, RoutedEventArgs e)
         {
-            // Знайдемо вікно свого додатка за назвою
-            IntPtr hWnd = FindWindow(null, "Window Manipulation");
+            // Отримати введений користувачем новий заголовок вікна
+            string newTitle = NewTitleTextBox.Text;
+
+            // Знайти вікно за ім'ям
+            IntPtr hWnd = new WindowInteropHelper(this).Handle;
 
             if (hWnd != IntPtr.Zero)
             {
-                // Відправимо повідомлення залежно від вибору користувача
-                if (rbChangeTitle.IsChecked == true)
+                // Визначити вибір користувача
+                if (SetTitleRadioButton.IsChecked == true)
                 {
-                    SendMessage(hWnd, WM_SETTEXT, 0, txtWindowTitle.Text);
+                    // Відправити повідомлення про зміну заголовка вікна
+                    SendMessage(hWnd, WM_SETTEXT, IntPtr.Zero, Marshal.StringToBSTR(newTitle));
                 }
-                else if (rbCloseWindow.IsChecked == true)
+                else if (CloseWindowRadioButton.IsChecked == true)
                 {
-                    SendMessage(hWnd, WM_CLOSE, 0, null);
+                    // Відправити повідомлення про закриття вікна
+                    SendMessage(hWnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
                 }
-                // Тут можна додати інші варіанти
+                else
+                {
+                    MessageBox.Show("Дія не обрана");
+                }
             }
             else
             {
-                MessageBox.Show("Вікно не знайдено.", "Помилка");
+                MessageBox.Show("Вікно не знайдено");
             }
         }
     }

@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Data.SqlTypes;
+using System.Diagnostics;
 
 namespace MatrixMultiplication
 {
@@ -8,14 +9,14 @@ namespace MatrixMultiplication
         {
             Stopwatch sw = new Stopwatch();
 
-            var A = Matrix.CreateSquareMatrix(100);
-            var B = Matrix.CreateSquareMatrix(100);
+            var A = Matrix.CreateSquareMatrix(1000);
+            var B = Matrix.CreateSquareMatrix(1000);
 
-            sw.Start();
+            /*sw.Start();
             Matrix.MultiplyInOneThread(A, B);
             sw.Stop();
             Console.WriteLine($"One thread: {sw.ElapsedMilliseconds} milliseconds");
-            sw.Reset();
+            sw.Reset();*/
 
             sw.Start();
             Matrix.MultiplyInNCoresThreads(A, B);
@@ -24,10 +25,22 @@ namespace MatrixMultiplication
             sw.Reset();
 
             sw.Start();
+            Matrix.MultiplyInNCoresTasks(A, B).Wait();
+            sw.Stop();
+            Console.WriteLine($"Four tasks: {sw.ElapsedMilliseconds} milliseconds");
+            sw.Reset();
+
+            /*sw.Start();
             Matrix.MultiplyInNxNThreads(A, B);
             sw.Stop();
             Console.WriteLine($"NxN threads: {sw.ElapsedMilliseconds} milliseconds");
             sw.Reset();
+
+            sw.Start();
+            Matrix.MultiplyInNxNTasks(A, B).Wait();
+            sw.Stop();
+            Console.WriteLine($"NxN tasks: {sw.ElapsedMilliseconds} milliseconds");
+            sw.Reset();*/
         }
     }
 
@@ -80,39 +93,83 @@ namespace MatrixMultiplication
         {
             int n = A.GetLength(0);
 
-            if(n % 4 != 0)
+            if (n % 4 != 0)
             {
                 throw new ArgumentException("Matrix size % 4 != 0");
             }
 
-            var t1 = new Thread(() => Multiply(A, B, 0, n / 4));
-            var t2 = new Thread(() => Multiply(A, B, n / 4, n /  2));
-            var t3 = new Thread(() => Multiply(A, B, n / 2, (n / 4) * 3));
-            var t4 = new Thread(() => Multiply(A, B, (n / 4) * 3, n));
+            Thread[] thread = new Thread[]
+            {
+                new Thread(() => Multiply(A, B, 0, n / 4)),
+                new Thread(() => Multiply(A, B, n / 4, n / 2)),
+                new Thread(() => Multiply(A, B, n / 2, (n / 4) * 3)),
+                new Thread(() => Multiply(A, B, (n / 4) * 3, n))
+            };
 
-            t1.Start();
-            t2.Start();
-            t3.Start();
-            t4.Start();
+            foreach (var t in thread)
+            {
+                t.Start();
+            }
 
-            t1.Join();
-            t2.Join();
-            t3.Join();
-            t4.Join();
+            while (thread.Where(t => t.IsAlive).Any())
+            {
+                Thread.Sleep(100);
+            }
+
+            //t1.Join();
+            //t2.Join();
+            //t3.Join();
+            //t4.Join();
+        }
+
+        public static async Task MultiplyInNCoresTasks(int[,] A, int[,] B)
+        {
+            int n = A.GetLength(0);
+
+            if (n % 4 != 0)
+            {
+                throw new ArgumentException("Matrix size % 4 != 0");
+            }
+
+            /*Thread[] thread = new Thread[]
+            {
+                new Thread(() => Multiply(A, B, 0, n / 4)),
+                new Thread(() => Multiply(A, B, n / 4, n / 2)),
+                new Thread(() => Multiply(A, B, n / 2, (n / 4) * 3)),
+                new Thread(() => Multiply(A, B, (n / 4) * 3, n))
+            };*/
+
+            Task[] tasks = new Task[4];
+
+            for (int i = 0; i < 4; i++)
+            {
+                tasks[i] = Task.Run(() => Multiply(A, B, 0, n / 4));
+
+                tasks[i] = Task.Run(() => Multiply(A, B, n / 4, n / 2));
+
+                tasks[i] = Task.Run(() => Multiply(A, B, n / 2, (n / 4) * 3));
+                tasks[i] = Task.Run(() => Multiply(A, B, (n / 4) * 3, n));
+            };
+
+            while (tasks.Where(t => !t.IsCompleted).Any())
+            {
+                await Task.Delay(50);
+            }
         }
 
         private static void Multiply(int[,] A, int[,] B, int start, int end)
         {
             int n = A.GetLength(0);
 
+            Console.WriteLine($"Start = {start}");
+            Console.WriteLine($"End = {end}");
+            Console.WriteLine($"N = {n}");
+
             for (int i = start; i < end; i++)
             {
                 for (int j = 0; j < n; j++)
                 {
-                    for (int k = 0; k < n; k++)
-                    {
-                        MultiplyRowColumn(A, B, i, j, n);
-                    }
+                    MultiplyRowColumn(A, B, i, j, n);
                 }
             }
         }
@@ -146,6 +203,30 @@ namespace MatrixMultiplication
                 for (int j = 0; j < n; j++)
                 {
                     threads[i, j].Join();
+                }
+            }
+
+            return C;
+        }
+
+        public static async Task<int[,]> MultiplyInNxNTasks(int[,] A, int[,] B)
+        {
+            int n = A.GetLength(0);
+            int[,] C = new int[n, n];
+
+            Task[,] tasks = new Task[n, n];
+
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < n; j++)
+                {
+                    int row = i;
+                    int col = j;
+
+                    await (tasks[i, j] = Task.Run(() =>
+                    {
+                        C[row, col] = MultiplyRowColumn(A, B, row, col, n);
+                    }));
                 }
             }
 

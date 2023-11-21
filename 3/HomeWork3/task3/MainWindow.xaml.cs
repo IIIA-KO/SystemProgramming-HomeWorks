@@ -14,7 +14,6 @@ namespace task3
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool MessageBeep(int uType);
 
-        const int MB_OK = 0x00000000;
         const int MB_ICONASTERISK = 0x00000040;
 
         private bool beepRunning;
